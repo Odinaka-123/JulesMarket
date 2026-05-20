@@ -21,9 +21,14 @@ export default function DashboardPage() {
   const [form, setForm] = useState({ date: "", deadline: "", notes: "" });
 
   useEffect(() => {
-    const q = query(collection(db, "market_days"), orderBy("createdAt", "desc"));
+    const q = query(
+      collection(db, "market_days"),
+      orderBy("createdAt", "desc"),
+    );
     const unsub = onSnapshot(q, (snap) => {
-      setMarketDays(snap.docs.map((doc) => ({ id: doc.id, ...doc.data() } as MarketDay)));
+      setMarketDays(
+        snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as MarketDay),
+      );
     });
     return () => unsub();
   }, []);
@@ -71,7 +76,6 @@ export default function DashboardPage() {
 
   return (
     <main className="min-h-dvh bg-[#0a1a0a] text-white">
-
       {/* Ambient */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-40 -left-40 w-80 h-80 sm:w-96 sm:h-96 bg-green-600 rounded-full opacity-10 blur-3xl" />
@@ -100,6 +104,11 @@ export default function DashboardPage() {
             <span className="hidden sm:flex text-xs text-white/30 bg-white/5 border border-white/10 px-3 py-1.5 rounded-full items-center gap-1">
               🔐 Admin
             </span>
+            <Link href="/admin/products">
+              <span className="text-xs text-white/40 hover:text-green-400 transition px-3 py-1.5 rounded-xl hover:bg-white/5 border border-transparent hover:border-white/10">
+                🥬 Products
+              </span>
+            </Link>
             <button
               onClick={handleSignOut}
               className="text-xs text-white/40 hover:text-red-400 transition px-3 py-1.5 rounded-xl hover:bg-white/5"
@@ -111,16 +120,13 @@ export default function DashboardPage() {
       </nav>
 
       <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
-
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           className="mb-6 sm:mb-8"
         >
-          <h1 className="text-2xl sm:text-3xl font-black mb-1">
-            Dashboard 👋
-          </h1>
+          <h1 className="text-2xl sm:text-3xl font-black mb-1">Dashboard 👋</h1>
           <p className="text-white/40 text-xs sm:text-sm">
             Manage your market days and track orders
           </p>
@@ -168,7 +174,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Empty state */}
-        {marketDays.length === 0 ? (
+        {marketDays.length === 0 ?
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -180,8 +186,7 @@ export default function DashboardPage() {
               Tap the button above to create your first one
             </p>
           </motion.div>
-        ) : (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        : <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <AnimatePresence>
               {marketDays.map((day, i) => (
                 <motion.div
@@ -193,7 +198,9 @@ export default function DashboardPage() {
                   <Link href={`/admin/market-day/${day.id}`}>
                     <div className="bg-white/3 border border-white/8 hover:border-green-500/40 hover:bg-white/5 active:scale-[0.98] rounded-2xl p-4 sm:p-5 transition-all duration-200 cursor-pointer group">
                       <div className="flex items-center justify-between mb-3">
-                        <span className={`text-xs border px-2.5 py-1 rounded-full font-medium ${statusStyle[day.status]}`}>
+                        <span
+                          className={`text-xs border px-2.5 py-1 rounded-full font-medium ${statusStyle[day.status]}`}
+                        >
                           {statusLabel[day.status]}
                         </span>
                         <span className="text-white/20 group-hover:text-green-400 transition-colors text-base">
@@ -227,7 +234,7 @@ export default function DashboardPage() {
               ))}
             </AnimatePresence>
           </div>
-        )}
+        }
       </div>
 
       {/* Create Modal */}
@@ -276,8 +283,10 @@ export default function DashboardPage() {
                       <input
                         type="date"
                         value={form.date}
-                        onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))}
-                        className="w-full bg-white/5 border border-white/10 focus:border-green-500/50 rounded-xl px-4 py-3 text-white text-sm outline-none transition [color-scheme:dark] cursor-pointer"
+                        onChange={(e) =>
+                          setForm((f) => ({ ...f, date: e.target.value }))
+                        }
+                        className="w-full bg-white/5 border border-white/10 focus:border-green-500/50 rounded-xl px-4 py-3 text-white text-sm outline-none transition scheme-dark cursor-pointer"
                       />
                     </div>
                   </div>
@@ -291,8 +300,10 @@ export default function DashboardPage() {
                       <input
                         type="datetime-local"
                         value={form.deadline}
-                        onChange={(e) => setForm((f) => ({ ...f, deadline: e.target.value }))}
-                        className="w-full bg-white/5 border border-white/10 focus:border-green-500/50 rounded-xl px-4 py-3 text-white text-sm outline-none transition [color-scheme:dark] cursor-pointer"
+                        onChange={(e) =>
+                          setForm((f) => ({ ...f, deadline: e.target.value }))
+                        }
+                        className="w-full bg-white/5 border border-white/10 focus:border-green-500/50 rounded-xl px-4 py-3 text-white text-sm outline-none transition scheme-dark cursor-pointer"
                       />
                     </div>
                   </div>
@@ -304,7 +315,9 @@ export default function DashboardPage() {
                     </label>
                     <textarea
                       value={form.notes}
-                      onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, notes: e.target.value }))
+                      }
                       placeholder="e.g. Ogbete main market, bring cash..."
                       rows={3}
                       className="w-full bg-white/5 border border-white/10 focus:border-green-500/50 rounded-xl px-4 py-3 text-white text-sm outline-none transition resize-none placeholder:text-white/20"

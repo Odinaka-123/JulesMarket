@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { db } from "@/lib/firebase/client";
 import {
@@ -26,7 +26,6 @@ import {
   Copy,
   Check,
   ChevronDown,
-  ChevronUp,
 } from "lucide-react";
 
 type Tab = "orders" | "shopping-list";
@@ -41,34 +40,142 @@ const statusFlow: Order["orderStatus"][] = [
 
 const statusConfig: Record<
   Order["orderStatus"],
-  { label: string; color: string; icon: React.ReactNode }
+  { label: string; color: string; dotColor: string; icon: React.ReactNode }
 > = {
   pending: {
     label: "Pending",
     color: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",
+    dotColor: "bg-yellow-400",
     icon: <Clock className="w-3 h-3" />,
   },
   confirmed: {
     label: "Confirmed",
     color: "bg-blue-500/10 text-blue-400 border-blue-500/20",
+    dotColor: "bg-blue-400",
     icon: <CheckCircle2 className="w-3 h-3" />,
   },
   packed: {
     label: "Packed",
     color: "bg-purple-500/10 text-purple-400 border-purple-500/20",
+    dotColor: "bg-purple-400",
     icon: <Package className="w-3 h-3" />,
   },
   ready: {
     label: "Ready",
     color: "bg-green-500/10 text-green-400 border-green-500/20",
+    dotColor: "bg-green-400",
     icon: <ShoppingBasket className="w-3 h-3" />,
   },
   delivered: {
     label: "Delivered",
-    color: "bg-white/5 text-white/40 border-white/10",
+    color: "bg-white/5 text-white/50 border-white/10",
+    dotColor: "bg-white/40",
     icon: <Truck className="w-3 h-3" />,
   },
 };
+
+const marketDayStatusConfig: Record<
+  MarketDay["status"],
+  { label: string; dot: string; badge: string }
+> = {
+  open: {
+    label: "Open",
+    dot: "bg-green-400",
+    badge: "bg-green-500/10 text-green-400 border-green-500/20",
+  },
+  closed: {
+    label: "Closed",
+    dot: "bg-yellow-400",
+    badge: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",
+  },
+  completed: {
+    label: "Completed",
+    dot: "bg-white/40",
+    badge: "bg-white/5 text-white/40 border-white/10",
+  },
+};
+
+// ── Custom Dropdown ────────────────────────────────────────────────────────
+
+function CustomDropdown<T extends string>({
+  value,
+  options,
+  onChange,
+  disabled,
+  renderOption,
+  renderSelected,
+  direction = "down", // 👈 add this
+}: {
+  value: T;
+  options: T[];
+  onChange: (v: T) => void;
+  disabled?: boolean;
+  renderOption: (v: T) => React.ReactNode;
+  renderSelected: (v: T) => React.ReactNode;
+  direction?: "down" | "up";
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center justify-between gap-2 bg-white/5 border border-white/10 hover:border-green-500/30 rounded-xl px-3 py-2.5 text-left transition disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        <span className="flex-1 min-w-0">{renderSelected(value)}</span>
+        <ChevronDown
+          className={`w-3.5 h-3.5 text-white/30 shrink-0 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, y: -4, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -4, scale: 0.97 }}
+            transition={{ duration: 0.15, ease: [0.22, 1, 0.36, 1] }}
+            className={`absolute z-50 ${direction === "up" ? "bottom-full mb-1.5" : "top-full mt-1.5"} left-0 right-0 bg-[#0f2010] border border-white/10 rounded-xl overflow-hidden shadow-2xl shadow-black/60`}
+          >
+            {options.map((opt) => (
+              <button
+                key={opt}
+                type="button"
+                onClick={() => {
+                  onChange(opt);
+                  setOpen(false);
+                }}
+                className={`w-full flex items-center gap-2 px-3 py-2.5 text-left hover:bg-white/5 transition text-sm ${
+                  opt === value ? "bg-green-500/10" : ""
+                }`}
+              >
+                {renderOption(opt)}
+                {opt === value && (
+                  <Check className="w-3 h-3 text-green-400 ml-auto shrink-0" />
+                )}
+              </button>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────
 
 function buildMasterList(orders: Order[]): MasterShoppingItem[] {
   const map = new Map<string, MasterShoppingItem>();
@@ -101,6 +208,8 @@ function buildMasterList(orders: Order[]): MasterShoppingItem[] {
   }
   return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
 }
+
+// ── Main Page ──────────────────────────────────────────────────────────────
 
 export default function MarketDayPage({
   params,
@@ -184,12 +293,6 @@ export default function MarketDayPage({
     .filter((o) => o.paymentConfirmed)
     .reduce((sum, o) => sum + o.totalEstimate + o.deliveryFee, 0);
 
-  const marketDayStatusStyle: Record<MarketDay["status"], string> = {
-    open: "bg-green-500/10 text-green-400 border-green-500/20",
-    closed: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",
-    completed: "bg-white/5 text-white/40 border-white/10",
-  };
-
   return (
     <main className="min-h-dvh bg-[#0a1a0a] text-white">
       {/* Ambient */}
@@ -197,8 +300,6 @@ export default function MarketDayPage({
         <div className="absolute -top-40 -left-40 w-80 h-80 bg-green-600 rounded-full opacity-10 blur-3xl" />
         <div className="absolute -bottom-40 -right-40 w-80 h-80 bg-emerald-500 rounded-full opacity-10 blur-3xl" />
       </div>
-
-      {/* Grid */}
       <div
         className="fixed inset-0 opacity-[0.03] pointer-events-none"
         style={{
@@ -243,55 +344,55 @@ export default function MarketDayPage({
             </div>
           </div>
 
-          {/* Right side: copy link + status */}
+          {/* Right: copy link + market day status dropdown */}
           <div className="flex items-center gap-2 shrink-0">
-            {/* Copy order link button — always visible */}
             <motion.button
               whileTap={{ scale: 0.93 }}
               onClick={copyOrderLink}
               className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl border transition-all duration-200 ${
-                copiedLink
-                  ? "bg-green-500/10 border-green-500/30 text-green-400"
-                  : "bg-white/5 border-white/10 text-white/40 hover:text-white/70 hover:border-white/20"
+                copiedLink ?
+                  "bg-green-500/10 border-green-500/30 text-green-400"
+                : "bg-white/5 border-white/10 text-white/50 hover:text-white/80 hover:border-white/20"
               }`}
             >
-              {copiedLink ? (
+              {copiedLink ?
                 <>
                   <Check className="w-3 h-3" />
                   <span className="hidden sm:inline">Copied!</span>
                 </>
-              ) : (
-                <>
+              : <>
                   <Copy className="w-3 h-3" />
                   <span className="hidden sm:inline">Copy link</span>
                 </>
-              )}
+              }
             </motion.button>
 
-            {/* Status badge + selector */}
             {marketDayStatus && (
-              <>
-                <span
-                  className={`text-xs border px-2.5 py-1 rounded-full font-medium hidden sm:inline-flex items-center gap-1 ${marketDayStatusStyle[marketDayStatus]}`}
-                >
-                  {marketDayStatus === "open" ?
-                    "🟢 Open"
-                  : marketDayStatus === "closed" ?
-                    "🟡 Closed"
-                  : "✅ Done"}
-                </span>
-                <select
+              <div className="w-36">
+                <CustomDropdown
                   value={marketDayStatus}
-                  onChange={(e) =>
-                    updateMarketDayStatus(e.target.value as MarketDay["status"])
+                  options={
+                    ["open", "closed", "completed"] as MarketDay["status"][]
                   }
-                  className="bg-white/5 border border-white/10 text-white text-xs rounded-xl px-2 py-1.5 outline-none [color-scheme:dark] cursor-pointer hover:border-green-500/30 transition"
-                >
-                  <option value="open">Open</option>
-                  <option value="closed">Closed</option>
-                  <option value="completed">Completed</option>
-                </select>
-              </>
+                  onChange={updateMarketDayStatus}
+                  renderSelected={(v) => (
+                    <span className="flex items-center gap-2 text-xs font-semibold text-white">
+                      <span
+                        className={`w-2 h-2 rounded-full shrink-0 ${marketDayStatusConfig[v].dot}`}
+                      />
+                      {marketDayStatusConfig[v].label}
+                    </span>
+                  )}
+                  renderOption={(v) => (
+                    <span className="flex items-center gap-2 text-xs font-semibold text-white">
+                      <span
+                        className={`w-2 h-2 rounded-full shrink-0 ${marketDayStatusConfig[v].dot}`}
+                      />
+                      {marketDayStatusConfig[v].label}
+                    </span>
+                  )}
+                />
+              </div>
             )}
           </div>
         </div>
@@ -371,16 +472,19 @@ export default function MarketDayPage({
                     whileTap={{ scale: 0.95 }}
                     onClick={copyOrderLink}
                     className={`mt-4 flex items-center gap-2 text-xs font-semibold border px-4 py-2 rounded-xl transition mx-auto ${
-                      copiedLink
-                        ? "bg-green-500/10 border-green-500/30 text-green-400"
-                        : "border-green-500/30 text-green-400 hover:bg-green-500/5"
+                      copiedLink ?
+                        "bg-green-500/10 border-green-500/30 text-green-400"
+                      : "border-green-500/30 text-green-400 hover:bg-green-500/5"
                     }`}
                   >
-                    {copiedLink ? (
-                      <><Check className="w-3.5 h-3.5" /> Copied!</>
-                    ) : (
-                      <><Copy className="w-3.5 h-3.5" /> Copy order link</>
-                    )}
+                    {copiedLink ?
+                      <>
+                        <Check className="w-3.5 h-3.5" /> Copied!
+                      </>
+                    : <>
+                        <Copy className="w-3.5 h-3.5" /> Copy order link
+                      </>
+                    }
                   </motion.button>
                 </div>
               : <div className="space-y-3">
@@ -406,9 +510,7 @@ export default function MarketDayPage({
                                 {order.customerName}
                               </p>
                               <span
-                                className={`text-xs border px-2 py-0.5 rounded-full font-medium inline-flex items-center gap-1 ${
-                                  statusConfig[order.orderStatus].color
-                                }`}
+                                className={`text-xs border px-2 py-0.5 rounded-full font-medium inline-flex items-center gap-1 ${statusConfig[order.orderStatus].color}`}
                               >
                                 {statusConfig[order.orderStatus].icon}
                                 {statusConfig[order.orderStatus].label}
@@ -440,9 +542,9 @@ export default function MarketDayPage({
                                 order.totalEstimate + order.deliveryFee
                               ).toLocaleString()}
                             </span>
-                            {expandedOrder === order.id ?
-                              <ChevronUp className="w-4 h-4 text-white/30" />
-                            : <ChevronDown className="w-4 h-4 text-white/30" />}
+                            <ChevronDown
+                              className={`w-4 h-4 text-white/30 transition-transform duration-200 ${expandedOrder === order.id ? "rotate-180" : ""}`}
+                            />
                           </div>
                         </div>
                       </div>
@@ -522,24 +624,43 @@ export default function MarketDayPage({
                                   <p className="text-xs text-white/30 mb-1.5 font-medium">
                                     Order Status
                                   </p>
-                                  <select
+                                  <CustomDropdown
                                     value={order.orderStatus}
+                                    options={statusFlow}
                                     disabled={updatingOrder === order.id}
-                                    onChange={(e) =>
+                                    direction="up"
+                                    onChange={(v) =>
                                       updateOrderStatus(
                                         order.id,
                                         "orderStatus",
-                                        e.target.value as Order["orderStatus"],
+                                        v,
                                       )
                                     }
-                                    className="w-full bg-white/5 border border-white/10 text-white text-xs rounded-xl px-3 py-2.5 outline-none [color-scheme:dark] cursor-pointer hover:border-green-500/30 transition"
-                                  >
-                                    {statusFlow.map((s) => (
-                                      <option key={s} value={s}>
-                                        {statusConfig[s].label}
-                                      </option>
-                                    ))}
-                                  </select>
+                                    renderSelected={(v) => (
+                                      <span
+                                        className={`flex items-center gap-1.5 text-xs font-semibold`}
+                                      >
+                                        <span
+                                          className={`w-2 h-2 rounded-full shrink-0 ${statusConfig[v].dotColor}`}
+                                        />
+                                        <span className="text-white">
+                                          {statusConfig[v].label}
+                                        </span>
+                                      </span>
+                                    )}
+                                    renderOption={(v) => (
+                                      <span
+                                        className={`flex items-center gap-1.5 text-xs font-semibold`}
+                                      >
+                                        <span
+                                          className={`w-2 h-2 rounded-full shrink-0 ${statusConfig[v].dotColor}`}
+                                        />
+                                        <span className="text-white">
+                                          {statusConfig[v].label}
+                                        </span>
+                                      </span>
+                                    )}
+                                  />
                                 </div>
 
                                 {/* Payment */}
@@ -626,7 +747,6 @@ export default function MarketDayPage({
                   </p>
                 </div>
               : <div>
-                  {/* Copy shopping list button */}
                   <div className="flex justify-end mb-4">
                     <motion.button
                       whileTap={{ scale: 0.95 }}
@@ -663,7 +783,6 @@ export default function MarketDayPage({
                             {item.totalQuantity} {item.unit}
                           </span>
                         </div>
-                        {/* Breakdown */}
                         <div className="flex flex-wrap gap-1.5">
                           {item.orders.map((o) => (
                             <span
