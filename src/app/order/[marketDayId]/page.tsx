@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { db } from "@/lib/firebase/client";
 import {
@@ -132,7 +132,6 @@ interface CatalogItem {
   id?: string;
   name: string;
   unit: string;
-  price?: number;
   available: boolean;
   category: string;
   emoji: string;
@@ -145,7 +144,7 @@ interface CartItem {
   unit: string;
   notes: string;
   isCustom: boolean;
-  price?: number;
+  budget?: number;
 }
 
 const UNITS = [
@@ -197,65 +196,144 @@ function genId() {
 function ProductCard({
   item,
   cartQty,
-  onIncrement,
+  cartBudget,
+  onAdd,
   onDecrement,
 }: {
   item: CatalogItem;
   cartQty: number;
-  onIncrement: () => void;
+  cartBudget?: number;
+  onAdd: (budget: number) => void;
   onDecrement: () => void;
 }) {
+  const [budgeting, setBudgeting] = useState(false);
+  const [budgetInput, setBudgetInput] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  function handlePlusClick() {
+    if (cartQty > 0) {
+      // Already in cart — just increment qty without re-asking budget
+      onAdd(cartBudget ?? 0);
+    } else {
+      setBudgeting(true);
+      setTimeout(() => inputRef.current?.focus(), 50);
+    }
+  }
+
+  function handleConfirm() {
+    const val = parseFloat(budgetInput);
+    if (!budgetInput || isNaN(val) || val <= 0) return;
+    onAdd(val);
+    setBudgetInput("");
+    setBudgeting(false);
+  }
+
+  function handleCancel() {
+    setBudgetInput("");
+    setBudgeting(false);
+  }
+
   return (
     <motion.div
       layout
-      className={`flex items-center justify-between rounded-2xl px-4 py-3 border transition-all duration-200 ${
+      className={`rounded-2xl border transition-all duration-200 ${
         cartQty > 0 ?
           "bg-green-500/8 border-green-500/30"
         : "bg-white/3 border-white/8 hover:border-white/15"
       }`}
     >
-      <div className="min-w-0 flex-1 mr-3">
-        <p className="text-sm font-semibold text-white leading-tight">
-          {item.name}
-        </p>
-        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-          <p className="text-xs text-white/30">{item.unit}</p>
-          {item.price ?
-            <p className="text-xs text-green-400/80 font-semibold">
-              ₦{item.price.toLocaleString()}/{item.unit}
-            </p>
-          : null}
+      <div className="flex items-center justify-between px-4 py-3">
+        <div className="min-w-0 flex-1 mr-3">
+          <p className="text-sm font-semibold text-white leading-tight">
+            {item.name}
+          </p>
+          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+            <p className="text-xs text-white/30">{item.unit}</p>
+            {cartQty > 0 && cartBudget ?
+              <p className="text-xs text-green-400/70 font-semibold">
+                Budget: ₦{cartBudget.toLocaleString()}
+              </p>
+            : null}
+          </div>
         </div>
+
+        {cartQty === 0 ?
+          <motion.button
+            whileTap={{ scale: 0.88 }}
+            onClick={handlePlusClick}
+            className="w-8 h-8 rounded-xl bg-green-500/10 border border-green-500/30 flex items-center justify-center text-green-400 hover:bg-green-500/20 transition shrink-0"
+          >
+            <Plus className="w-4 h-4" />
+          </motion.button>
+        : <div className="flex items-center gap-2 shrink-0">
+            <motion.button
+              whileTap={{ scale: 0.88 }}
+              onClick={onDecrement}
+              className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-white/50 hover:text-white transition"
+            >
+              <Minus className="w-3 h-3" />
+            </motion.button>
+            <span className="text-sm font-black text-green-400 w-5 text-center tabular-nums">
+              {cartQty}
+            </span>
+            <motion.button
+              whileTap={{ scale: 0.88 }}
+              onClick={handlePlusClick}
+              className="w-7 h-7 rounded-lg bg-green-500/10 border border-green-500/30 flex items-center justify-center text-green-400 hover:bg-green-500/20 transition"
+            >
+              <Plus className="w-3 h-3" />
+            </motion.button>
+          </div>
+        }
       </div>
 
-      {cartQty === 0 ?
-        <motion.button
-          whileTap={{ scale: 0.88 }}
-          onClick={onIncrement}
-          className="w-8 h-8 rounded-xl bg-green-500/10 border border-green-500/30 flex items-center justify-center text-green-400 hover:bg-green-500/20 transition shrink-0"
-        >
-          <Plus className="w-4 h-4" />
-        </motion.button>
-      : <div className="flex items-center gap-2 shrink-0">
-          <motion.button
-            whileTap={{ scale: 0.88 }}
-            onClick={onDecrement}
-            className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-white/50 hover:text-white transition"
+      {/* Inline budget input */}
+      <AnimatePresence>
+        {budgeting && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+            className="overflow-hidden"
           >
-            <Minus className="w-3 h-3" />
-          </motion.button>
-          <span className="text-sm font-black text-green-400 w-5 text-center tabular-nums">
-            {cartQty}
-          </span>
-          <motion.button
-            whileTap={{ scale: 0.88 }}
-            onClick={onIncrement}
-            className="w-7 h-7 rounded-lg bg-green-500/10 border border-green-500/30 flex items-center justify-center text-green-400 hover:bg-green-500/20 transition"
-          >
-            <Plus className="w-3 h-3" />
-          </motion.button>
-        </div>
-      }
+            <div className="px-4 pb-3 flex items-center gap-2">
+              <div className="relative flex-1">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 text-sm">
+                  ₦
+                </span>
+                <input
+                  ref={inputRef}
+                  type="number"
+                  value={budgetInput}
+                  onChange={(e) => setBudgetInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleConfirm();
+                    if (e.key === "Escape") handleCancel();
+                  }}
+                  placeholder="Your budget"
+                  className="w-full bg-white/5 border border-white/15 focus:border-green-500/50 rounded-xl pl-8 pr-3 py-2 text-white text-sm outline-none transition placeholder:text-white/20"
+                />
+              </div>
+              <motion.button
+                whileTap={{ scale: 0.9 }}
+                onClick={handleConfirm}
+                disabled={!budgetInput || parseFloat(budgetInput) <= 0}
+                className="w-9 h-9 rounded-xl bg-green-500 disabled:opacity-30 flex items-center justify-center text-black shrink-0"
+              >
+                <Check className="w-4 h-4" />
+              </motion.button>
+              <motion.button
+                whileTap={{ scale: 0.9 }}
+                onClick={handleCancel}
+                className="w-9 h-9 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-white/40 shrink-0"
+              >
+                <X className="w-4 h-4" />
+              </motion.button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }
@@ -289,6 +367,7 @@ export default function OrderPage({
   const [customQty, setCustomQty] = useState("1");
   const [customUnit, setCustomUnit] = useState("kg");
   const [customNotes, setCustomNotes] = useState("");
+  const [customBudget, setCustomBudget] = useState("");
 
   // checkout
   const [showCheckout, setShowCheckout] = useState(false);
@@ -345,14 +424,10 @@ export default function OrderPage({
           ),
         );
 
-        const overridesMap = new Map<
-          string,
-          { price?: number; available: boolean }
-        >();
+        const overridesMap = new Map<string, { available: boolean }>();
         overridesSnap.docs.forEach((d) => {
           const data = d.data();
           overridesMap.set(d.id, {
-            price: data.price,
             available: data.available ?? true,
           });
         });
@@ -380,7 +455,6 @@ export default function OrderPage({
               id: d.id,
               name: data.name,
               unit: data.unit,
-              price: override?.price ?? data.defaultPrice,
               available: override?.available ?? true,
               category: data.category,
               emoji: cat?.emoji ?? "🛒",
@@ -442,7 +516,7 @@ export default function OrderPage({
   function increment(
     name: string,
     unit: string,
-    price?: number,
+    budget?: number,
     isCustom = false,
   ) {
     setCart((prev) => {
@@ -460,7 +534,7 @@ export default function OrderPage({
           unit,
           notes: "",
           isCustom,
-          price,
+          budget,
         },
       ];
     });
@@ -482,7 +556,7 @@ export default function OrderPage({
   }
 
   function addCustomItem() {
-    if (!customName.trim() || !customQty) return;
+    if (!customName.trim() || !customQty || !customBudget) return;
     setCart((prev) => [
       ...prev,
       {
@@ -492,12 +566,14 @@ export default function OrderPage({
         unit: customUnit,
         notes: customNotes.trim(),
         isCustom: true,
+        budget: parseFloat(customBudget),
       },
     ]);
     setCustomName("");
     setCustomQty("1");
     setCustomUnit("kg");
     setCustomNotes("");
+    setCustomBudget("");
     setShowCustomModal(false);
   }
 
@@ -530,13 +606,10 @@ export default function OrderPage({
         quantity: c.quantity,
         unit: c.unit,
         notes: c.notes || undefined,
-        estimatedPrice: c.price ? c.price * c.quantity : undefined,
+        budget: c.budget,
       }));
 
-      const totalEstimate = cart.reduce(
-        (sum, c) => sum + (c.price ? c.price * c.quantity : 0),
-        0,
-      );
+      const totalEstimate = cart.reduce((sum, c) => sum + (c.budget ?? 0), 0);
 
       // Build order payload — strip undefined fields Firestore rejects
       const rawOrder = {
@@ -594,10 +667,7 @@ export default function OrderPage({
     : [];
 
   const totalCartItems = cart.reduce((s, c) => s + c.quantity, 0);
-  const totalEstimate = cart.reduce(
-    (s, c) => s + (c.price ? c.price * c.quantity : 0),
-    0,
-  );
+  const totalBudget = cart.reduce((s, c) => s + (c.budget ?? 0), 0);
 
   // ── States ────────────────────────────────────────────────────────────────
 
@@ -698,11 +768,11 @@ export default function OrderPage({
                 : "📦 Courier"}
               </span>
             </div>
-            {totalEstimate > 0 && (
+            {totalBudget > 0 && (
               <div className="flex items-center justify-between border-t border-white/5 pt-2">
-                <span className="text-xs text-white/30">Estimated total</span>
+                <span className="text-xs text-white/30">Total budget</span>
                 <span className="text-xs font-black text-green-400">
-                  ₦{totalEstimate.toLocaleString()}
+                  ₦{totalBudget.toLocaleString()}
                 </span>
               </div>
             )}
@@ -844,8 +914,11 @@ export default function OrderPage({
                       key={item.id ?? `${item.category}-${item.name}`}
                       item={item}
                       cartQty={getQty(item.name)}
-                      onIncrement={() =>
-                        increment(item.name, item.unit, item.price)
+                      cartBudget={
+                        cart.find((c) => c.name === item.name)?.budget
+                      }
+                      onAdd={(budget) =>
+                        increment(item.name, item.unit, budget)
                       }
                       onDecrement={() => decrement(item.name)}
                     />
@@ -906,8 +979,11 @@ export default function OrderPage({
                       key={item.id ?? `${item.category}-${item.name}`}
                       item={item}
                       cartQty={getQty(item.name)}
-                      onIncrement={() =>
-                        increment(item.name, item.unit, item.price)
+                      cartBudget={
+                        cart.find((c) => c.name === item.name)?.budget
+                      }
+                      onAdd={(budget) =>
+                        increment(item.name, item.unit, budget)
                       }
                       onDecrement={() => decrement(item.name)}
                     />
@@ -943,8 +1019,8 @@ export default function OrderPage({
               </span>
               <span>View Cart</span>
               <span className="text-black/60 font-bold">
-                {totalEstimate > 0 ?
-                  `₦${totalEstimate.toLocaleString()}`
+                {totalBudget > 0 ?
+                  `₦${totalBudget.toLocaleString()}`
                 : `${totalCartItems} item${totalCartItems !== 1 ? "s" : ""}`}
               </span>
             </motion.button>
@@ -1008,12 +1084,9 @@ export default function OrderPage({
                               <p className="text-xs text-white/30">
                                 {item.unit}
                               </p>
-                              {item.price && (
+                              {item.budget && (
                                 <p className="text-xs text-green-400/70">
-                                  ₦
-                                  {(
-                                    item.price * item.quantity
-                                  ).toLocaleString()}
+                                  Budget: ₦{item.budget.toLocaleString()}
                                 </p>
                               )}
                               {item.isCustom && (
@@ -1035,7 +1108,7 @@ export default function OrderPage({
                             </span>
                             <button
                               onClick={() =>
-                                increment(item.name, item.unit, item.price)
+                                increment(item.name, item.unit, item.budget)
                               }
                               className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-white/50 hover:text-white transition"
                             >
@@ -1067,13 +1140,13 @@ export default function OrderPage({
 
               {cart.length > 0 && (
                 <div className="px-4 py-4 border-t border-white/5 shrink-0 space-y-3">
-                  {totalEstimate > 0 && (
+                  {totalBudget > 0 && (
                     <div className="flex items-center justify-between bg-green-500/5 border border-green-500/10 rounded-xl px-4 py-3">
                       <span className="text-xs text-white/40">
-                        Estimated total
+                        Total budget
                       </span>
                       <span className="font-black text-green-400">
-                        ₦{totalEstimate.toLocaleString()}
+                        ₦{totalBudget.toLocaleString()}
                       </span>
                     </div>
                   )}
@@ -1252,19 +1325,21 @@ export default function OrderPage({
                           <span className="text-xs text-white/40">
                             {item.quantity} {item.unit}
                           </span>
-                          {item.price && (
+                          {item.budget && (
                             <span className="text-xs text-green-400/70 font-semibold">
-                              ₦{(item.price * item.quantity).toLocaleString()}
+                              Budget: ₦{item.budget.toLocaleString()}
                             </span>
                           )}
                         </div>
                       </div>
                     ))}
-                    {totalEstimate > 0 && (
+                    {totalBudget > 0 && (
                       <div className="border-t border-white/5 pt-2 flex items-center justify-between">
-                        <span className="text-xs text-white/30">Subtotal</span>
+                        <span className="text-xs text-white/30">
+                          Total budget
+                        </span>
                         <span className="text-sm font-black text-green-400">
-                          ₦{totalEstimate.toLocaleString()}
+                          ₦{totalBudget.toLocaleString()}
                         </span>
                       </div>
                     )}
@@ -1379,6 +1454,18 @@ export default function OrderPage({
                     <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/30 pointer-events-none" />
                   </div>
                 </div>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30 text-sm">
+                    ₦
+                  </span>
+                  <input
+                    type="number"
+                    value={customBudget}
+                    onChange={(e) => setCustomBudget(e.target.value)}
+                    placeholder="Your budget *"
+                    className="w-full bg-white/5 border border-white/10 focus:border-green-500/50 rounded-xl pl-8 pr-4 py-3 text-white text-sm outline-none transition placeholder:text-white/20"
+                  />
+                </div>
                 <input
                   type="text"
                   value={customNotes}
@@ -1397,7 +1484,7 @@ export default function OrderPage({
                 <motion.button
                   whileTap={{ scale: 0.97 }}
                   onClick={addCustomItem}
-                  disabled={!customName.trim() || !customQty}
+                  disabled={!customName.trim() || !customQty || !customBudget}
                   className="flex-1 py-3 rounded-xl bg-green-500 hover:bg-green-400 text-black font-bold text-sm transition disabled:opacity-40 shadow-lg shadow-green-500/20"
                 >
                   Add to cart

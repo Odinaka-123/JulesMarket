@@ -104,7 +104,7 @@ function CustomDropdown<T extends string>({
   disabled,
   renderOption,
   renderSelected,
-  direction = "down", // 👈 add this
+  direction = "down",
 }: {
   value: T;
   options: T[];
@@ -144,11 +144,17 @@ function CustomDropdown<T extends string>({
       <AnimatePresence>
         {open && (
           <motion.div
-            initial={{ opacity: 0, y: -4, scale: 0.97 }}
+            initial={{
+              opacity: 0,
+              y: direction === "up" ? 4 : -4,
+              scale: 0.97,
+            }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -4, scale: 0.97 }}
+            exit={{ opacity: 0, y: direction === "up" ? 4 : -4, scale: 0.97 }}
             transition={{ duration: 0.15, ease: [0.22, 1, 0.36, 1] }}
-            className={`absolute z-50 ${direction === "up" ? "bottom-full mb-1.5" : "top-full mt-1.5"} left-0 right-0 bg-[#0f2010] border border-white/10 rounded-xl overflow-hidden shadow-2xl shadow-black/60`}
+            className={`absolute z-50 ${
+              direction === "up" ? "bottom-full mb-1.5" : "top-full mt-1.5"
+            } left-0 right-0 bg-[#0f2010] border border-white/10 rounded-xl overflow-hidden shadow-2xl shadow-black/60`}
           >
             {options.map((opt) => (
               <button
@@ -185,21 +191,25 @@ function buildMasterList(orders: Order[]): MasterShoppingItem[] {
       if (map.has(key)) {
         const existing = map.get(key)!;
         existing.totalQuantity += item.quantity;
+        existing.totalBudget = (existing.totalBudget ?? 0) + (item.budget ?? 0);
         existing.orders.push({
           orderId: order.id,
           customerName: order.customerName,
           quantity: item.quantity,
+          budget: item.budget,
         });
       } else {
         map.set(key, {
           name: item.name,
           unit: item.unit,
           totalQuantity: item.quantity,
+          totalBudget: item.budget ?? 0,
           orders: [
             {
               orderId: order.id,
               customerName: order.customerName,
               quantity: item.quantity,
+              budget: item.budget,
             },
           ],
         });
@@ -274,7 +284,12 @@ export default function MarketDayPage({
     const text =
       `🛒 JulesMarket Shopping List\n` +
       `📅 ${marketDay ? new Date(marketDay.date).toLocaleDateString("en-NG", { weekday: "long", month: "long", day: "numeric" }) : ""}\n\n` +
-      list.map((i) => `• ${i.name} — ${i.totalQuantity} ${i.unit}`).join("\n");
+      list
+        .map(
+          (i) =>
+            `• ${i.name} — ${i.totalBudget ? `₦${i.totalBudget.toLocaleString()}` : `${i.totalQuantity} ${i.unit}`}`,
+        )
+        .join("\n");
     navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -309,7 +324,7 @@ export default function MarketDayPage({
       />
 
       {/* Navbar */}
-      <nav className="relative z-10 border-b border-white/5 bg-black/20 backdrop-blur-xl top-0">
+      <nav className="relative z-30 border-b border-white/5 bg-black/20 backdrop-blur-xl top-0">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 sm:h-16 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
             <Link href="/admin/dashboard">
@@ -374,6 +389,7 @@ export default function MarketDayPage({
                   options={
                     ["open", "closed", "completed"] as MarketDay["status"][]
                   }
+                  direction="down"
                   onChange={updateMarketDayStatus}
                   renderSelected={(v) => (
                     <span className="flex items-center gap-2 text-xs font-semibold text-white">
@@ -492,7 +508,7 @@ export default function MarketDayPage({
                     <motion.div
                       key={order.id}
                       layout
-                      className="bg-white/3 border border-white/8 rounded-2xl overflow-hidden"
+                      className="bg-white/3 border border-white/8 rounded-2xl overflow-visible"
                     >
                       {/* Order header */}
                       <div
@@ -560,9 +576,10 @@ export default function MarketDayPage({
                               duration: 0.25,
                               ease: [0.22, 1, 0.36, 1],
                             }}
-                            className="overflow-hidden"
+                            style={{ overflow: "visible" }}
+                            className="border-t border-white/5"
                           >
-                            <div className="px-4 pb-4 border-t border-white/5 pt-3 space-y-4">
+                            <div className="px-4 pb-4 pt-3 space-y-4">
                               {/* Items */}
                               <div>
                                 <p className="text-xs text-white/30 mb-2 font-medium uppercase tracking-wide">
@@ -581,10 +598,10 @@ export default function MarketDayPage({
                                         <span className="text-xs text-white/40">
                                           {item.quantity} {item.unit}
                                         </span>
-                                        {item.estimatedPrice ?
-                                          <span className="text-xs text-white/50">
-                                            ₦
-                                            {item.estimatedPrice.toLocaleString()}
+                                        {item.budget ?
+                                          <span className="text-xs text-green-400/60 font-semibold">
+                                            Budget: ₦
+                                            {item.budget.toLocaleString()}
                                           </span>
                                         : null}
                                       </div>
@@ -637,9 +654,7 @@ export default function MarketDayPage({
                                       )
                                     }
                                     renderSelected={(v) => (
-                                      <span
-                                        className={`flex items-center gap-1.5 text-xs font-semibold`}
-                                      >
+                                      <span className="flex items-center gap-1.5 text-xs font-semibold">
                                         <span
                                           className={`w-2 h-2 rounded-full shrink-0 ${statusConfig[v].dotColor}`}
                                         />
@@ -649,9 +664,7 @@ export default function MarketDayPage({
                                       </span>
                                     )}
                                     renderOption={(v) => (
-                                      <span
-                                        className={`flex items-center gap-1.5 text-xs font-semibold`}
-                                      >
+                                      <span className="flex items-center gap-1.5 text-xs font-semibold">
                                         <span
                                           className={`w-2 h-2 rounded-full shrink-0 ${statusConfig[v].dotColor}`}
                                         />
@@ -776,12 +789,22 @@ export default function MarketDayPage({
                         className="bg-white/3 border border-white/8 rounded-2xl p-4"
                       >
                         <div className="flex items-center justify-between mb-2">
-                          <p className="font-bold text-sm sm:text-base capitalize">
-                            {item.name}
-                          </p>
-                          <span className="text-sm font-black text-green-400">
-                            {item.totalQuantity} {item.unit}
-                          </span>
+                          <div className="min-w-0">
+                            <p className="font-bold text-sm sm:text-base capitalize">
+                              {item.name}
+                            </p>
+                            <p className="text-xs text-white/30 mt-0.5">
+                              {item.totalQuantity} {item.unit} total
+                            </p>
+                          </div>
+                          {item.totalBudget ?
+                            <span className="text-sm font-black text-green-400 shrink-0">
+                              ₦{item.totalBudget.toLocaleString()}
+                            </span>
+                          : <span className="text-sm font-black text-white/40 shrink-0">
+                              {item.totalQuantity} {item.unit}
+                            </span>
+                          }
                         </div>
                         <div className="flex flex-wrap gap-1.5">
                           {item.orders.map((o) => (
@@ -789,7 +812,10 @@ export default function MarketDayPage({
                               key={o.orderId}
                               className="text-xs bg-white/5 border border-white/8 text-white/40 px-2 py-0.5 rounded-full"
                             >
-                              {o.customerName}: {o.quantity} {item.unit}
+                              {o.customerName}:{" "}
+                              {o.budget ?
+                                `₦${o.budget.toLocaleString()}`
+                              : `${o.quantity} ${item.unit}`}
                             </span>
                           ))}
                         </div>

@@ -13,12 +13,26 @@ import {
 } from "firebase/firestore";
 import { MarketDay } from "@/types";
 import Link from "next/link";
+import { Trash2, UserPlus, ShieldCheck, X } from "lucide-react";
+
+interface AdminEntry {
+  id: string;
+  email: string;
+  name?: string;
+  addedAt: string;
+}
 
 export default function DashboardPage() {
   const [marketDays, setMarketDays] = useState<MarketDay[]>([]);
+  const [admins, setAdmins] = useState<AdminEntry[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showAdminModal, setShowAdminModal] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [addingAdmin, setAddingAdmin] = useState(false);
+  const [removingAdmin, setRemovingAdmin] = useState<string | null>(null);
   const [form, setForm] = useState({ date: "", deadline: "", notes: "" });
+  const [adminForm, setAdminForm] = useState({ email: "", name: "" });
+  const [adminError, setAdminError] = useState("");
 
   useEffect(() => {
     const q = query(
@@ -27,7 +41,16 @@ export default function DashboardPage() {
     );
     const unsub = onSnapshot(q, (snap) => {
       setMarketDays(
-        snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as MarketDay),
+        snap.docs.map((d) => ({ id: d.id, ...d.data() }) as MarketDay),
+      );
+    });
+    return () => unsub();
+  }, []);
+
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, "admins"), (snap) => {
+      setAdmins(
+        snap.docs.map((d) => ({ id: d.id, ...d.data() }) as AdminEntry),
       );
     });
     return () => unsub();
@@ -50,6 +73,47 @@ export default function DashboardPage() {
       console.error(e);
     }
     setCreating(false);
+  }
+
+  async function handleAddAdmin() {
+    if (!adminForm.email) return;
+    setAdminError("");
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(adminForm.email)) {
+      setAdminError("Please enter a valid email address.");
+      return;
+    }
+    setAddingAdmin(true);
+    try {
+      const res = await fetch("/api/admins", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: adminForm.email, name: adminForm.name }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setAdminError(data.error || "Failed to add admin.");
+      } else {
+        setAdminForm({ email: "", name: "" });
+      }
+    } catch {
+      setAdminError("Network error. Try again.");
+    }
+    setAddingAdmin(false);
+  }
+
+  async function handleRemoveAdmin(adminId: string) {
+    setRemovingAdmin(adminId);
+    try {
+      const res = await fetch("/api/admins", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: adminId }),
+      });
+      if (!res.ok) console.error("Failed to remove admin");
+    } catch (e) {
+      console.error(e);
+    }
+    setRemovingAdmin(null);
   }
 
   async function handleSignOut() {
@@ -81,8 +145,6 @@ export default function DashboardPage() {
         <div className="absolute -top-40 -left-40 w-80 h-80 sm:w-96 sm:h-96 bg-green-600 rounded-full opacity-10 blur-3xl" />
         <div className="absolute -bottom-40 -right-40 w-80 h-80 sm:w-96 sm:h-96 bg-emerald-500 rounded-full opacity-10 blur-3xl" />
       </div>
-
-      {/* Grid */}
       <div
         className="fixed inset-0 opacity-[0.03] pointer-events-none"
         style={{
@@ -109,6 +171,13 @@ export default function DashboardPage() {
                 🥬 Products
               </span>
             </Link>
+            <button
+              onClick={() => setShowAdminModal(true)}
+              className="text-xs text-white/40 hover:text-green-400 transition px-3 py-1.5 rounded-xl hover:bg-white/5 border border-transparent hover:border-white/10 flex items-center gap-1.5"
+            >
+              <ShieldCheck className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Admins</span>
+            </button>
             <button
               onClick={handleSignOut}
               className="text-xs text-white/40 hover:text-red-400 transition px-3 py-1.5 rounded-xl hover:bg-white/5"
@@ -237,7 +306,7 @@ export default function DashboardPage() {
         }
       </div>
 
-      {/* Create Modal */}
+      {/* ── Create Market Day Modal ── */}
       <AnimatePresence>
         {showCreateModal && (
           <>
@@ -256,11 +325,9 @@ export default function DashboardPage() {
               className="fixed inset-x-0 bottom-0 z-50 sm:inset-auto sm:top-1/2 sm:left-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:w-full sm:max-w-md sm:px-4"
             >
               <div className="bg-[#0f1f0f] border border-white/10 rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl">
-                {/* Handle bar for mobile */}
                 <div className="flex justify-center mb-4 sm:hidden">
                   <div className="w-10 h-1 bg-white/20 rounded-full" />
                 </div>
-
                 <div className="flex items-center justify-between mb-5">
                   <h2 className="font-bold text-base sm:text-lg">
                     📅 New Market Day
@@ -269,46 +336,36 @@ export default function DashboardPage() {
                     onClick={() => setShowCreateModal(false)}
                     className="text-white/30 hover:text-white/60 transition w-8 h-8 flex items-center justify-center rounded-xl hover:bg-white/5"
                   >
-                    ✕
+                    <X className="w-4 h-4" />
                   </button>
                 </div>
-
                 <div className="space-y-4">
-                  {/* Market Date */}
                   <div>
                     <label className="text-xs text-white/40 mb-1.5 block font-medium">
                       Market Date
                     </label>
-                    <div className="relative">
-                      <input
-                        type="date"
-                        value={form.date}
-                        onChange={(e) =>
-                          setForm((f) => ({ ...f, date: e.target.value }))
-                        }
-                        className="w-full bg-white/5 border border-white/10 focus:border-green-500/50 rounded-xl px-4 py-3 text-white text-sm outline-none transition scheme-dark cursor-pointer"
-                      />
-                    </div>
+                    <input
+                      type="date"
+                      value={form.date}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, date: e.target.value }))
+                      }
+                      className="w-full bg-white/5 border border-white/10 focus:border-green-500/50 rounded-xl px-4 py-3 text-white text-sm outline-none transition scheme-dark cursor-pointer"
+                    />
                   </div>
-
-                  {/* Order Deadline */}
                   <div>
                     <label className="text-xs text-white/40 mb-1.5 block font-medium">
                       Order Deadline
                     </label>
-                    <div className="relative">
-                      <input
-                        type="datetime-local"
-                        value={form.deadline}
-                        onChange={(e) =>
-                          setForm((f) => ({ ...f, deadline: e.target.value }))
-                        }
-                        className="w-full bg-white/5 border border-white/10 focus:border-green-500/50 rounded-xl px-4 py-3 text-white text-sm outline-none transition scheme-dark cursor-pointer"
-                      />
-                    </div>
+                    <input
+                      type="datetime-local"
+                      value={form.deadline}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, deadline: e.target.value }))
+                      }
+                      className="w-full bg-white/5 border border-white/10 focus:border-green-500/50 rounded-xl px-4 py-3 text-white text-sm outline-none transition scheme-dark cursor-pointer"
+                    />
                   </div>
-
-                  {/* Notes */}
                   <div>
                     <label className="text-xs text-white/40 mb-1.5 block font-medium">
                       Notes <span className="text-white/20">(optional)</span>
@@ -324,7 +381,6 @@ export default function DashboardPage() {
                     />
                   </div>
                 </div>
-
                 <div className="flex gap-3 mt-6">
                   <button
                     onClick={() => setShowCreateModal(false)}
@@ -340,6 +396,166 @@ export default function DashboardPage() {
                   >
                     {creating ? "Creating..." : "Create 🛒"}
                   </motion.button>
+                </div>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* ── Admin Management Modal ── */}
+      <AnimatePresence>
+        {showAdminModal && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/70 backdrop-blur-sm z-40"
+              onClick={() => setShowAdminModal(false)}
+            />
+            <motion.div
+              initial={{ opacity: 0, y: "100%" }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: "100%" }}
+              transition={{ ease: [0.22, 1, 0.36, 1], duration: 0.4 }}
+              className="fixed inset-x-0 bottom-0 z-50 sm:inset-auto sm:top-1/2 sm:left-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:w-full sm:max-w-lg sm:px-4"
+            >
+              <div className="bg-[#0f1f0f] border border-white/10 rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl max-h-[85dvh] flex flex-col">
+                {/* Handle */}
+                <div className="flex justify-center mb-4 sm:hidden">
+                  <div className="w-10 h-1 bg-white/20 rounded-full" />
+                </div>
+
+                {/* Header */}
+                <div className="flex items-center justify-between mb-5 shrink-0">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="w-5 h-5 text-green-400" />
+                    <h2 className="font-bold text-base sm:text-lg">
+                      Admin Access
+                    </h2>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setShowAdminModal(false);
+                      setAdminError("");
+                      setAdminForm({ email: "", name: "" });
+                    }}
+                    className="text-white/30 hover:text-white/60 transition w-8 h-8 flex items-center justify-center rounded-xl hover:bg-white/5"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Add admin form */}
+                <div className="bg-white/3 border border-white/8 rounded-2xl p-4 mb-4 shrink-0">
+                  <p className="text-xs text-white/40 font-medium mb-3 uppercase tracking-wide">
+                    Add New Admin
+                  </p>
+                  <div className="space-y-2.5">
+                    <input
+                      type="email"
+                      value={adminForm.email}
+                      onChange={(e) => {
+                        setAdminForm((f) => ({ ...f, email: e.target.value }));
+                        setAdminError("");
+                      }}
+                      placeholder="email@example.com"
+                      className="w-full bg-white/5 border border-white/10 focus:border-green-500/50 rounded-xl px-3 py-2.5 text-white text-sm outline-none transition placeholder:text-white/20"
+                    />
+                    <input
+                      type="text"
+                      value={adminForm.name}
+                      onChange={(e) =>
+                        setAdminForm((f) => ({ ...f, name: e.target.value }))
+                      }
+                      placeholder="Name (optional)"
+                      className="w-full bg-white/5 border border-white/10 focus:border-green-500/50 rounded-xl px-3 py-2.5 text-white text-sm outline-none transition placeholder:text-white/20"
+                    />
+                    <AnimatePresence>
+                      {adminError && (
+                        <motion.p
+                          initial={{ opacity: 0, y: -4 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0 }}
+                          className="text-xs text-red-400 px-1"
+                        >
+                          {adminError}
+                        </motion.p>
+                      )}
+                    </AnimatePresence>
+                    <motion.button
+                      whileTap={{ scale: 0.97 }}
+                      onClick={handleAddAdmin}
+                      disabled={addingAdmin || !adminForm.email}
+                      className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-green-500 hover:bg-green-400 text-black font-bold text-sm transition disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <UserPlus className="w-4 h-4" />
+                      {addingAdmin ? "Adding..." : "Add Admin"}
+                    </motion.button>
+                  </div>
+                </div>
+
+                {/* Admin list */}
+                <div className="overflow-y-auto flex-1 min-h-0">
+                  <p className="text-xs text-white/40 font-medium mb-2 uppercase tracking-wide">
+                    Current Admins ({admins.length})
+                  </p>
+                  {admins.length === 0 ?
+                    <div className="text-center py-8 border border-dashed border-white/10 rounded-2xl">
+                      <p className="text-white/30 text-sm">
+                        No admins added yet
+                      </p>
+                      <p className="text-white/20 text-xs mt-1">
+                        Add one above to get started
+                      </p>
+                    </div>
+                  : <div className="space-y-2">
+                      <AnimatePresence>
+                        {admins.map((admin) => (
+                          <motion.div
+                            key={admin.id}
+                            initial={{ opacity: 0, y: 6 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, x: -10 }}
+                            className="flex items-center justify-between bg-white/3 border border-white/8 rounded-xl px-3 py-2.5 gap-3"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-semibold text-white truncate">
+                                {admin.name || admin.email}
+                              </p>
+                              {admin.name && (
+                                <p className="text-xs text-white/40 truncate">
+                                  {admin.email}
+                                </p>
+                              )}
+                              <p className="text-xs text-white/20 mt-0.5">
+                                Added{" "}
+                                {new Date(admin.addedAt).toLocaleDateString(
+                                  "en-NG",
+                                  {
+                                    month: "short",
+                                    day: "numeric",
+                                    year: "numeric",
+                                  },
+                                )}
+                              </p>
+                            </div>
+                            <motion.button
+                              whileTap={{ scale: 0.9 }}
+                              onClick={() => handleRemoveAdmin(admin.id)}
+                              disabled={removingAdmin === admin.id}
+                              className="w-8 h-8 flex items-center justify-center rounded-xl text-white/20 hover:text-red-400 hover:bg-red-500/10 transition shrink-0 disabled:opacity-40"
+                            >
+                              {removingAdmin === admin.id ?
+                                <span className="w-3 h-3 border border-white/20 border-t-white/60 rounded-full animate-spin" />
+                              : <Trash2 className="w-3.5 h-3.5" />}
+                            </motion.button>
+                          </motion.div>
+                        ))}
+                      </AnimatePresence>
+                    </div>
+                  }
                 </div>
               </div>
             </motion.div>

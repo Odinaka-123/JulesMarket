@@ -1,5 +1,10 @@
 export type MarketDayStatus = "open" | "closed" | "completed";
-export type OrderStatus = "pending" | "confirmed" | "packed" | "ready" | "delivered";
+export type OrderStatus =
+  | "pending"
+  | "confirmed"
+  | "packed"
+  | "ready"
+  | "delivered";
 export type DeliveryType = "pickup" | "delivery" | "courier";
 
 export interface MarketDay {
@@ -18,6 +23,7 @@ export interface OrderItem {
   unit: string; // kg, pieces, bags, etc.
   estimatedPrice?: number;
   notes?: string;
+  budget?: number;
 }
 
 export interface Order {
@@ -49,5 +55,11 @@ export interface MasterShoppingItem {
   name: string;
   unit: string;
   totalQuantity: number;
-  orders: { orderId: string; customerName: string; quantity: number }[];
+  totalBudget?: number;
+  orders: {
+    orderId: string;
+    customerName: string;
+    quantity: number;
+    budget?: number;
+  }[];
 }
